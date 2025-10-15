@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Test clínico de arquetipos — Aplicado por Carmen (Psicóloga)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    :root {
+      --primary: #2f4f4f;
+      --accent: #0077cc;
+      --bg: #f7fafc;
+      --card: #ffffff;
+      --text: #1a202c;
+      --muted: #718096;
+    }
+    body {
+      margin: 0; padding: 0; background: var(--bg); color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.5;
+    }
+    .container { max-width: 900px; margin: 24px auto; padding: 0 16px; }
+    .card {
+      background: var(--card); border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      padding: 20px; margin-bottom: 16px;
+    }
+    h1 { margin: 0 0 6px; color: var(--primary); font-weight: 700; }
+    .subtitle { color: var(--muted); margin: 0 0 16px; }
+    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+    .question { border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; background: #fff; }
+    .q-title { font-weight: 600; margin-bottom: 6px; }
+    .scale { display: flex; gap: 10px; flex-wrap: wrap; }
+    .scale label { display: flex; align-items: center; gap: 6px; font-size: 14px; color: #2d3748; }
+    .controls { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+    button {
+      border: none; border-radius: 8px; padding: 10px 14px; cursor: pointer; font-weight: 600;
+      background: var(--accent); color: #fff;
+    }
+    button.secondary { background: #4a5568; }
+    button.ghost { background: #edf2f7; color: #1a202c; }
+    .results { margin-top: 12px; }
+    .table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    .table th, .table td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; }
+    .table th { background: #f1f5f9; font-weight: 700; }
+    .tag { display: inline-block; background: #e6fffa; color: #087f5b; padding: 4px 8px; border-radius: 999px; font-size: 12px; margin-right: 6px; }
+    .note { color: var(--muted); font-size: 13px; }
+    .header-line { margin-top: 4px; font-size: 14px; }
+    .footer { color: var(--muted); font-size: 12px; margin-top: 8px; }
+    .warning { color: #b83232; font-weight: 600; }
+    .success { color: #0f766e; font-weight: 600; }
+    input[type="text"], input[type="date"] {
+      border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>Test clínico de arquetipos</h1>
+      <div class="header-line">Aplicado por Carmen (Psicóloga)</div>
+      <p class="subtitle">Completa las 48 afirmaciones (escala 1–5). Al finalizar, verás tus resultados y podrás descargar un PDF.</p>
+
+      <div class="grid">
+        <div>
+          <label><strong>Nombre del paciente:</strong></label>
+          <input type="text" id="paciente" placeholder="Nombre y apellidos" />
+        </div>
+        <div>
+          <label><strong>Fecha de aplicación:</strong></label>
+          <input type="date" id="fecha" />
+        </div>
+      </div>
+      <p class="note">Escala: 1 = Nada / 2 = Poco / 3 = Moderado / 4 = Mucho / 5 = Siempre</p>
+    </div>
+
+    <form id="testForm" class="card">
+      <div id="preguntas"></div>
+      <div class="controls">
+        <button type="button" onclick="verificarYCalcular()">Ver resultados</button>
+        <button type="button" class="ghost" onclick="limpiar()">Limpiar respuestas</button>
+      </div>
+    </form>
+
+    <div id="resultadosCard" class="card" style="display:none;">
+      <h2>Resultados</h2>
+      <div id="resumen"></div>
+
+      <h3>Puntajes por arquetipo</h3>
+      <table class="table" id="tablaArquetipos">
+        <thead>
+          <tr><th>Arquetipo</th><th>Puntaje</th><th>Promedio</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <div id="top3"></div>
+      <div id="interpretacion"></div>
+
+      <div class="controls">
+        <button id="pdfBtn" type="button" class="secondary" onclick="descargarPDF()">Descargar PDF</button>
+      </div>
+      <p class="footer">Este instrumento es orientativo y no sustituye evaluación clínica integral.</p>
+    </div>
+  </div>
+
+  <script>
+    // Definición de arquetipos y asignación (12 arquetipos × 4 ítems = 48)
+    const arquetipos = [
+      { key: "sabio", nombre: "Sabio" },
+      { key: "cuidador", nombre: "Cuidador" },
+      { key: "explorador", nombre: "Explorador" },
+      { key: "creador", nombre: "Creador" },
+      { key: "heroe", nombre: "Héroe" },
+      { key: "inocente", nombre: "Inocente" },
+      { key: "rebelde", nombre: "Rebelde" },
+      { key: "mago", nombre: "Mago" },
+      { key: "gobernante", nombre: "Gobernante" },
+      { key: "amante", nombre: "Amante" },
+      { key: "bufon", nombre: "Bufón" },
+      { key: "huérfano", nombre: "Huérfano" }
+    ];
+
+    // Ítems por arquetipo (4 cada uno, textos claros y clínicos)
+    const items = [
+      // Sabio (1–4)
+      { a:"sabio", t:"Busco comprender las causas profundas de las cosas y pienso de forma analítica." },
+      { a:"sabio", t:"Me gusta estudiar, investigar y contrastar fuentes antes de decidir." },
+      { a:"sabio", t:"Prefiero la claridad y la verdad aunque implique incomodidad." },
+      { a:"sabio", t:"Disfruto enseñar y traducir ideas complejas en lenguaje accesible." },
+      // Cuidador (5–8)
+      { a:"cuidador", t:"Me nace proteger y acompañar a personas vulnerables." },
+      { a:"cuidador", t:"Priorizo el bienestar ajeno aun a costa de mi comodidad." },
+      { a:"cuidador", t:"Escucho con empatía y busco aliviar el dolor de otros." },
+      { a:"cuidador", t:"Organizo recursos para asistencia y seguimiento." },
+      // Explorador (9–12)
+      { a:"explorador", t:"Me siento llamado a descubrir caminos nuevos y ampliar límites." },
+      { a:"explorador", t:"Cambio de entorno o método cuando necesito crecimiento." },
+      { a:"explorador", t:"Valoro la autonomía y la experiencia directa." },
+      { a:"explorador", t:"Aprendo viajando, probando y cuestionando supuestos." },
+      // Creador (13–16)
+      { a:"creador", t:"Disfruto diseñar, construir o dar forma a ideas en algo tangible." },
+      { a:"creador", t:"La estética y la funcionalidad importan en lo que hago." },
+      { a:"creador", t:"Transformo problemas en oportunidades creativas." },
+      { a:"creador", t:"Itero y mejoro constantemente mis proyectos." },
+      // Héroe (17–20)
+      { a:"heroe", t:"Actúo con coraje frente a la adversidad." },
+      { a:"heroe", t:"Me comprometo con metas altas y las sostengo." },
+      { a:"heroe", t:"Asumo responsabilidad y doy ejemplo en momentos críticos." },
+      { a:"heroe", t:"Persisto hasta resolver lo que otros abandonan." },
+      // Inocente (21–24)
+      { a:"inocente", t:"Mantengo esperanza y confianza en lo bueno." },
+      { a:"inocente", t:"Busco simplicidad y orden para vivir en paz." },
+      { a:"inocente", t:"Creo que la transparencia facilita la cooperación." },
+      { a:"inocente", t:"Evito la complejidad innecesaria cuando puedo." },
+      // Rebelde (25–28)
+      { a:"rebelde", t:"Cuestiono normas cuando perpetúan injusticia o estancamiento." },
+      { a:"rebelde", t:"Propongo cambios concretos y accionables." },
+      { a:"rebelde", t:"Tolero el conflicto si abre camino a mejoras reales." },
+      { a:"rebelde", t:"Me resisto a la mediocridad institucional." },
+      // Mago (29–32)
+      { a:"mago", t:"Integro conocimiento de áreas distintas para lograr transformaciones." },
+      { a:"mago", t:"Percibo patrones y sincronías útiles para el cambio." },
+      { a:"mago", t:"Diseño procesos que catalizan evolución personal o comunitaria." },
+      { a:"mago", t:"Conecto visión y práctica para resultados inesperados." },
+      // Gobernante (33–36)
+      { a:"gobernante", t:"Organizo sistemas y establezco estructuras claras." },
+      { a:"gobernante", t:"Delego y coordino equipos hacia objetivos compartidos." },
+      { a:"gobernante", t:"Cuido la sostenibilidad y el orden a largo plazo." },
+      { a:"gobernante", t:"Tomo decisiones difíciles con criterio y responsabilidad." },
+      // Amante (37–40)
+      { a:"amante", t:"Valoro la conexión emocional y la lealtad en relaciones." },
+      { a:"amante", t:"Busco belleza, presencia y gratitud en lo cotidiano." },
+      { a:"amante", t:"Me comprometo con vínculos que nutren y sanan." },
+      { a:"amante", t:"Practico la atención plena en el encuentro con otros." },
+      // Bufón (41–44)
+      { a:"bufon", t:"Uso el humor para aliviar tensiones y acercar personas." },
+      { a:"bufon", t:"Veo el lado lúdico sin perder profundidad." },
+      { a:"bufon", t:"Desarmo rigidez con juego y creatividad." },
+      { a:"bufon", t:"Facilito ambientes livianos y productivos." },
+      // Huérfano (45–48)
+      { a:"huérfano", t:"Reconozco mis heridas y busco pertenencia auténtica." },
+      { a:"huérfano", t:"Identifico límites sanos tras experiencias de abandono." },
+      { a:"huérfano", t:"Construyo resiliencia y redes de apoyo reales." },
+      { a:"huérfano", t:"Transformo dolor en empatía y responsabilidad." }
+    ];
+
+    // Render dinámico de preguntas
+    const cont = document.getElementById("preguntas");
+    items.forEach((item, i) => {
+      const idx = i + 1;
+      const div = document.createElement("div");
+      div.className = "question";
+      div.innerHTML = `
+        <div class="q-title">${idx}. ${item.t} <span class="tag">${nombreArquetipo(item.a)}</span></div>
+        <div class="scale">
+          ${[1,2,3,4,5].map(v => `
+            <label><input type="radio" name="q${idx}" value="${v}"> ${v}</label>
+          `).join('')}
+        </div>
+      `;
+      cont.appendChild(div);
+    });
+
+    function nombreArquetipo(key) {
+      const a = arquetipos.find(x => x.key === key);
+      return a ? a.nombre : key;
+    }
+
+    function limpiar() {
+      document.getElementById("testForm").reset();
+      document.getElementById("resultadosCard").style.display = "none";
+    }
+
+    function verificarYCalcular() {
+      // Verifica nombre y fecha
+      const paciente = document.getElementById("paciente").value.trim();
+      const fecha = document.getElementById("fecha").value;
+      if (!paciente || !fecha) {
+        alert("Ingresa el nombre del paciente y la fecha de aplicación.");
+        return;
+      }
+      // Verifica 48 respuestas
+      for (let i = 1; i <= 48; i++) {
+        const group = document.getElementsByName("q"+i);
+        if (![...group].some(r => r.checked)) {
+          alert("Falta responder la afirmación " + i + ".");
+          return;
+        }
+      }
+      calcular();
+    }
+
+    function calcular() {
+      // Sumar por arquetipo
+      const puntajes = {};
+      arquetipos.forEach(a => puntajes[a.key] = 0);
+
+      items.forEach((item, i) => {
+        const idx = i + 1;
+        const group = document.getElementsByName("q"+idx);
+        const sel = [...group].find(r => r.checked);
+        if (sel) puntajes[item.a] += parseInt(sel.value, 10);
+      });
+
+      // Promedios y top 3
+      const resultados = arquetipos.map(a => {
+        const total = puntajes[a.key]; // 4 ítems por arquetipo, máximo 20
+        const promedio = (total / 4).toFixed(2);
+        return { key: a.key, nombre: a.nombre, total, promedio: parseFloat(promedio) };
+      }).sort((x, y) => y.total - x.total);
+
+      const top3 = resultados.slice(0,3);
+
+      // Resumen
+      const paciente = document.getElementById("paciente").value.trim();
+      const fecha = document.getElementById("fecha").value;
+      const totalGlobal = resultados.reduce((acc, r) => acc + r.total, 0); // máx 12*20=240
+      const promedioGlobal = (totalGlobal / 48).toFixed(2);
+
+      document.getElementById("resultadosCard").style.display = "block";
+      document.getElementById("resumen").innerHTML = `
+        <p><strong>Paciente:</strong> ${paciente}</p>
+        <p><strong>Fecha:</strong> ${fecha}</p>
+        <p><strong>Puntaje global:</strong> ${totalGlobal} &nbsp; <span class="note">(máx. 240)</span></p>
+        <p><strong>Promedio global:</strong> ${promedioGlobal}</p>
+      `;
+
+      // Tabla
+      const tbody = document.querySelector("#tablaArquetipos tbody");
+      tbody.innerHTML = "";
+      resultados.forEach(r => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${r.nombre}</td><td>${r.total}</td><td>${r.promedio.toFixed(2)}</td>`;
+        tbody.appendChild(tr);
+      });
+
+      // Top 3
+      document.getElementById("top3").innerHTML = `
+        <h3>Arquetipos dominantes (Top 3)</h3>
+        <p>
+          <span class="tag">${top3[0].nombre}</span>
+          <span class="tag">${top3[1].nombre}</span>
+          <span class="tag">${top3[2].nombre}</span>
+        </p>
+      `;
+
+      // Interpretación breve (ejemplo orientativo)
+      const interpretacionText = generarInterpretacion(top3);
+      document.getElementById("interpretacion").innerHTML = `
+        <h3>Interpretación clínica breve</h3>
+        <p>${interpretacionText}</p>
+      `;
+    }
+
+    function generarInterpretacion(top3) {
+      // Mensajes breves por arquetipo (se pueden ajustar clínicamente)
+      const msg = {
+        sabio: "Fuerte orientación a la verdad, análisis y enseñanza.",
+        cuidador: "Vocación de servicio, apoyo y contención emocional.",
+        explorador: "Búsqueda de expansión y autonomía, apertura al cambio.",
+        creador: "Innovación y diseño de soluciones; adaptación creativa.",
+        heroe: "Coraje, responsabilidad y logro frente a la dificultad.",
+        inocente: "Esperanza y simplicidad; preferencia por ambientes claros.",
+        rebelde: "Impulso transformador que cuestiona lo estéril.",
+        mago: "Integración profunda y procesos de cambio significativos.",
+        gobernante: "Organización, estructura y visión de largo plazo.",
+        amante: "Vínculos nutritivos, belleza y presencia emocional.",
+        bufon: "Humor, flexibilidad y alivio de tensiones relacionales.",
+        "huérfano": "Resiliencia, límites sanos y pertenencia auténtica."
+      };
+      return top3.map(t => `• ${t.nombre}: ${msg[t.key] || "Dominio funcional."}`).join(" ");
+    }
+
+    function descargarPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+
+      // Datos
+      const paciente = (document.getElementById("paciente").value || "").trim();
+      const fecha = document.getElementById("fecha").value || "";
+      const rows = [...document.querySelectorAll("#tablaArquetipos tbody tr")].map(tr => {
+        const tds = tr.querySelectorAll("td");
+        return { arquetipo: tds[0].innerText, total: tds[1].innerText, promedio: tds[2].innerText };
+      });
+      const resumenText = document.getElementById("resumen").innerText;
+      const topText = document.getElementById("top3").innerText.replace("Arquetipos dominantes (Top 3)", "").trim();
+      const interpretacionText = document.getElementById("interpretacion").innerText.replace("Interpretación clínica breve", "").trim();
+
+      // Encabezado
+      let y = 40;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(16);
+      doc.text("Test clínico de arquetipos", 40, y); y += 18;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(11);
+      doc.text("Aplicado por Carmen (Psicóloga)", 40, y); y += 24;
+
+      // Datos del paciente
+      doc.setFont("helvetica", "bold"); doc.text("Datos del paciente", 40, y); y += 16;
+      doc.setFont("helvetica", "normal");
+      doc.text(`Nombre: ${paciente || "-"}`, 40, y); y += 14;
+      doc.text(`Fecha: ${fecha || "-"}`, 40, y); y += 20;
+
+      // Resumen global
+      doc.setFont("helvetica", "bold"); doc.text("Resumen global", 40, y); y += 16;
+      wrapText(doc, resumenText, 40, y, 515); y += 40;
+
+      // Tabla de arquetipos
+      doc.setFont("helvetica", "bold"); doc.text("Puntajes por arquetipo", 40, y); y += 16;
+      // Cabecera
+      doc.setDrawColor(220); doc.setFillColor(245); doc.rect(40, y, 515, 22, "F"); 
+      doc.setFont("helvetica", "bold"); doc.text("Arquetipo", 50, y+15);
+      doc.text("Puntaje", 270, y+15);
+      doc.text("Promedio", 370, y+15);
+      y += 26;
+      doc.setFont("helvetica", "normal");
+      rows.forEach(r => {
+        doc.text(r.arquetipo, 50, y);
+        doc.text(String(r.total), 270, y);
+        doc.text(String(r.promedio), 370, y);
+        y += 16;
+        if (y > 760) { doc.addPage(); y = 40; }
+      });
+      y += 10;
+
+      // Top 3
+      doc.setFont("helvetica", "bold"); doc.text("Arquetipos dominantes (Top 3)", 40, y); y += 16;
+      wrapText(doc, topText, 40, y, 515); y += 32;
+
+      // Interpretación clínica breve
+      doc.setFont("helvetica", "bold"); doc.text("Interpretación clínica breve", 40, y); y += 16;
+      wrapText(doc, interpretacionText, 40, y, 515); y += 40;
+
+      // Pie
+      doc.setFont("helvetica", "normal"); doc.setTextColor(120);
+      wrapText(doc, "Este instrumento es orientativo y no sustituye evaluación clínica integral.", 40, y, 515);
+
+      doc.save(`Resultados_arquetipos_${paciente || "paciente"}.pdf`);
+    }
+
+    // Utilidad: envolver texto
+    function wrapText(doc, text, x, y, maxWidth) {
+      const lines = doc.splitTextToSize(text, maxWidth);
+      lines.forEach(line => { doc.text(line, x, y); y += 14; });
+    }
+  </script>
+</body>
+</html>
